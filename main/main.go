@@ -24,6 +24,3 @@ var db = map[string]string{
 //	//使用 http.ListenAndServe 在 9999 端口启动了 HTTP 服务。
 //	log.Fatal(http.ListenAndServe(addr, peers))
 //}
-
-// 2022.4.8 摆烂！老头环万岁
-// 2022.4.9 bai!
