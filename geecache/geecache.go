@@ -1,6 +1,7 @@
 package geecache
 
 import (
+	"Learning_Code/geecache/singleflight"
 	"fmt"
 	"log"
 	"sync"
@@ -24,9 +25,10 @@ func (f GetterFunc) Get(key string) ([]byte, error) {
 //一个Group可以认为是缓存的命名空间，每个Group有唯一的name。比如可以有成绩sources，学生信息info
 type Group struct {
 	name      string
-	getter    Getter //缓存未命中时的回调callback
-	mainCache cache  //前面实现的并发缓存
+	getter    Getter // 缓存未命中时的回调callback
+	mainCache cache  // 前面实现的并发缓存
 	peers     PeerPicker
+	loader    *singleflight.Group // 用于保证每个key只访问一次
 }
 
 var (
@@ -50,6 +52,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
+		loader:    &singleflight.Group{},
 	}
 	//将这个Group加入到map映射中
 	groups[name] = g
@@ -92,16 +95,25 @@ func (g *Group) RegisterPeers(peers PeerPicker) {
 
 // 使用 PickPeer() 方法选择节点，若非本机节点，则调用 getFromPeer() 从远程获取。若是本机节点或失败，则回退到 getLocally()
 func (g *Group) load(key string) (value ByteView, err error) {
-	if g.peers != nil {
-		if peer, ok := g.peers.PickPeer(key); ok {
-			if value, err = g.getFromPeer(peer, key); err == nil {
-				return value, nil
+	// 无论并发请求有多少（本地或远程都是），每个key只获取一次
+	viewi, err := g.loader.Do(key, func() (interface{}, error) {
+		// 传入匿名函数，并判断从哪个节点获取val
+		if g.peers != nil {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err = g.getFromPeer(peer, key); err == nil {
+					return value, nil
+				}
+				log.Println("[GeeCache] Failed to get from peer", err)
 			}
-			log.Println("[GeeCache] Failed to get from peer", err)
 		}
-	}
+		// 从本地获取val
+		return g.getLocally(key)
+	})
 
-	return g.getLocally(key)
+	if err == nil {
+		return viewi.(ByteView), nil
+	}
+	return
 }
 
 // 使用实现了 PeerGetter 接口的 httpGetter 从访问远程节点，获取缓存值。
