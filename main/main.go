@@ -1,10 +1,13 @@
 package main
 
-var db = map[string]string{
-	"Tom":  "630",
-	"Jack": "589",
-	"Sam":  "567",
-}
+import "Learning_Code/mysql_learning"
+
+// geecache测试
+//var db = map[string]string{
+//	"Tom":  "630",
+//	"Jack": "589",
+//	"Sam":  "567",
+//}
 
 // 测试http.go
 //func main() {
@@ -25,3 +28,8 @@ var db = map[string]string{
 //	log.Fatal(http.ListenAndServe(addr, peers))
 //}
 //
+
+// mysql测试
+func main() {
+	mysql_learning.Main()
+}
